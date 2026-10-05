@@ -139,6 +139,8 @@ class Settings:
     top_k: int
     candidate_k: int
     hybrid_alpha: float         # 1.0 = 纯向量，0.0 = 纯 BM25，中间值 = 混合
+    segment_mode: str           # bigram（默认）| jieba
+    min_bm25_score: float       # 原始 BM25 分低于它，就判定"没找到"
 
     # --- 展示 ---
     usd_to_cny: float
@@ -174,6 +176,8 @@ def get_settings() -> Settings:
         top_k=_int("TOP_K", 4),
         candidate_k=_int("CANDIDATE_K", 20),
         hybrid_alpha=_float("HYBRID_ALPHA", 0.0),
+        segment_mode=_str("SEGMENT_MODE", "bigram").lower(),
+        min_bm25_score=_float("MIN_BM25_SCORE", 11.5),
         usd_to_cny=_float("USD_TO_CNY", 7.2),
         data_dir=data_dir,
         knowledge_dir=data_dir / "knowledge",

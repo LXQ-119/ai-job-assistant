@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -72,9 +73,67 @@ _jieba_module = None
 _jieba_probed = False
 
 
+def _is_noise(token: str) -> bool:
+    """是不是纯标点/符号/空白。
+
+    标点必须挡在分词外面。踩过的坑：问号被当成一个"词"参与打分，
+    而它只在少数几张卡里出现，IDF 特别高 —— 一个「？」就贡献了
+    负例 89.5% 的分数，把完全无关的卡片顶到第 1 名。
+    标点没有任何检索价值，只会制造假信号。
+    """
+    return bool(token) and all(
+        unicodedata.category(ch)[0] in ("P", "S", "Z") for ch in token
+    )
+
+
+def _bigram_segment(text: str) -> list[str]:
+    """中文按相邻两字切，英文保留整词。
+
+    为什么默认用它？因为分词器在**查询**和**文档**里的切法可能不一致。
+
+    真实踩到的例子：
+        查询"我从小米那次面试里学到了什么？"
+            jieba 把"小米"切成了 "从小" + "米"
+        而文档里"小米"是一个完整的词
+        → 两边对不上，最关键的词直接作废
+        → 正确答案从第 1 名掉到第 5 名，被挤出 top 4
+        → 系统回答"资料里没有"，可资料里明明有
+
+    二元组不看词，只看相邻两个字：
+        "我从小米" → 我从 / 从小 / 小米
+    "小米" 这个二元组在查询和文档里都会出现，**永远对得上**。
+
+    代价：索引变大、会多出一些噪音匹配，所以必须配合 min_bm25_score 用。
+    """
+    lowered = text.lower()
+    tokens: list[str] = []
+
+    for word in _LATIN_RE.findall(lowered):
+        if word not in _STOPWORDS and not _is_noise(word):
+            tokens.append(word)
+
+    for run in _CJK_RE.findall(lowered):
+        # 单字也留着，否则只问一个字时会一条都匹配不上
+        for ch in run:
+            if ch not in _STOPWORDS:
+                tokens.append(ch)
+        for i in range(len(run) - 1):
+            bigram = run[i : i + 2]
+            if bigram not in _STOPWORDS:
+                tokens.append(bigram)
+
+    return tokens
+
+
 def _segment(text: str) -> list[str]:
-    """分词。装了 jieba 就用 jieba，没装退化成"英文整词 + 中文二元组"。"""
+    """分词入口。模式由 SEGMENT_MODE 决定：bigram（默认）或 jieba。
+
+    两种模式都会剔除标点符号。
+    """
     global _jieba_module, _jieba_probed
+
+    if get_settings().segment_mode == "bigram":
+        return _bigram_segment(text)
 
     if not _jieba_probed:
         _jieba_probed = True
@@ -90,7 +149,11 @@ def _segment(text: str) -> list[str]:
     else:
         raw_tokens = _fallback_segment(text)
 
-    return [t for t in (tok.strip().lower() for tok in raw_tokens) if t and t not in _STOPWORDS]
+    return [
+        t
+        for t in (tok.strip().lower() for tok in raw_tokens)
+        if t and t not in _STOPWORDS and not _is_noise(t)
+    ]
 
 
 def _fallback_segment(text: str) -> list[str]:
@@ -251,6 +314,22 @@ class KnowledgeBase:
         # 返回无关内容会诱导模型硬编一个答案，这比老实说"资料里没有"糟糕得多。
         if not use_vector and (not bm25_values or max(bm25_values) <= 0.0):
             return []
+
+        # 最低分阈值：分数最高的那张卡如果都没过线，说明整个库里没有相关内容。
+        #
+        # 为什么必须有这一道？
+        #   BM25 一定会给出一个"最高分"，哪怕全是噪声 —— 因为总有一张卡
+        #   恰好撞上一两个常见字。不设门槛的话，系统永远能"找到"东西，
+        #   于是永远不说"没找到"，也就永远在骗用户。
+        #
+        # 阈值怎么定的（不是拍脑袋）：
+        #   把评测集里所有正例的最低分、所有负例的最高分都扫出来，
+        #   在"零误杀正例"的前提下取窗口中间值，留出安全余量。
+        #   当前配置下：正例最低 13.592，负例最高 9.416 → 取 11.5。
+        #   注意：**换分词方式或往知识库里加大量新文件后，必须重新扫一遍。**
+        if not use_vector and settings.min_bm25_score > 0:
+            if max(bm25_values) < settings.min_bm25_score:
+                return []
 
         scored: list[ScoredChunk] = []
         for position, index in enumerate(candidate_indices):

@@ -1,12 +1,30 @@
-{"question": "BM25 里的 IDF 是干什么用的？", "expected_source": "sample_interview_notes.md", "must_contain": ["IDF", "出现越少"]}
-{"question": "切块时的 overlap 有什么作用？", "expected_source": "sample_interview_notes.md", "must_contain": ["切口", "上下文"]}
-{"question": "为什么要做混合检索，两路检索各自擅长什么？", "expected_source": "sample_interview_notes.md", "must_contain": ["精确", "语义"]}
-{"question": "RAG 的效果应该怎么评测？有哪些指标？", "expected_source": "sample_interview_notes.md", "must_contain": ["Hit@k", "MRR"]}
-{"question": "怎么抑制大模型的幻觉？", "expected_source": "sample_interview_notes.md", "must_contain": ["引用", "资料"]}
-{"question": "Agent 里的 function calling 是怎么工作的？", "expected_source": "sample_interview_notes.md", "must_contain": ["工具", "调用"]}
-{"question": "有哪些控制大模型调用成本的办法？", "expected_source": "sample_interview_notes.md", "must_contain": ["缓存", "token"]}
-{"question": "流式输出能改善什么？为什么它有效？", "expected_source": "sample_interview_notes.md", "must_contain": ["首字", "延迟"]}
-{"question": "为什么 BM25 分数和余弦相似度不能直接相加？", "expected_source": "sample_interview_notes.md", "must_contain": ["归一化", "无上界"]}
-{"question": "什么时候应该引入向量数据库？", "expected_source": "sample_interview_notes.md", "must_contain": ["数据量", "并发"]}
-{"question": "要求模型输出 JSON 时要注意什么？", "expected_source": "sample_interview_notes.md", "must_contain": ["JSON", "校验"]}
-{"question": "延迟优化有哪些手段，该看哪个指标？", "expected_source": "sample_interview_notes.md", "must_contain": ["P95", "并行"]}
+{"id": 1,  "type": "paraphrase", "question": "我的笔记里说，模型为什么会编答案？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["幻觉", "退路"]}
+{"id": 2,  "type": "paraphrase", "question": "怎么才能让回答有据可查、用户能自己核对？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["引用", "核对"]}
+{"id": 3,  "type": "paraphrase", "question": "把一份几万字的文档直接全部发给模型，会有什么问题？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["贵", "慢"]}
+{"id": 4,  "type": "paraphrase", "question": "切块的时候，什么情况下需要保留一部分重复内容？为什么？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["overlap", "切口"]}
+{"id": 5,  "type": "paraphrase", "question": "检索的时候，什么样的词应该被赋予更高的权重？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["IDF", "出现越少"]}
+{"id": 6,  "type": "paraphrase", "question": "用户说响应好慢，但文档里写的词是延迟，靠什么检索方式能连起来？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["向量", "语义"]}
+{"id": 7,  "type": "paraphrase", "question": "怎么知道我的问答系统到底好不好用？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["评测", "Hit@k"]}
+{"id": 8,  "type": "paraphrase", "question": "怎么衡量检索有没有把正确的那段捞出来？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["Hit@k", "MRR"]}
+{"id": 9,  "type": "paraphrase", "question": "怎么才能让模型自己去查数据库或者调用接口？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["工具", "调用"]}
+{"id": 10, "type": "paraphrase", "question": "工具执行失败了，整个流程会不会直接崩掉？应该怎么设计？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["错误", "重试"]}
+{"id": 11, "type": "paraphrase", "question": "要求模型输出结构化数据时，光靠提示词够吗？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["Pydantic", "校验"]}
+{"id": 12, "type": "paraphrase", "question": "为什么说输出比输入更烧钱？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["输出", "单价"]}
+{"id": 13, "type": "paraphrase", "question": "用户感觉卡，但我测的总耗时并不长，这是什么原因？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["首字", "流式"]}
+{"id": 14, "type": "paraphrase", "question": "为什么面试官会问我为什么不用 LangChain？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["LangChain", "原生"]}
+{"id": 15, "type": "paraphrase", "question": "怎么让检索结果的排序更准？除了换模型还有什么办法？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["rerank", "粗排"]}
+{"id": 16, "type": "paraphrase", "question": "评测延迟的时候，只看平均值有什么问题？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["P95", "平均"]}
+{"id": 17, "type": "multi_hop", "question": "从一堆文档到能回答问题，中间要经过哪些步骤？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["切块", "检索"]}
+{"id": 18, "type": "multi_hop", "question": "我的项目里，哪些设计是为了给模型留退路？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["没有提到", "资料"]}
+{"id": 19, "type": "multi_hop", "question": "成本和延迟这两件事，有哪些优化手段是共通的？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["缓存", "流式"]}
+{"id": 20, "type": "multi_hop", "question": "如果我想让系统既能查我的笔记、又能做算术，架构上要改哪里？", "expected_sources": ["sample_interview_notes.md"], "must_contain": ["工具", "Agent"]}
+{"id": 21, "type": "multi_hop", "question": "我实习期间做的事情，和我在项目里学到的哪个理念是一致的？", "expected_sources": ["我的面经补充笔记.md"], "must_contain": ["自动化"]}
+{"id": 22, "type": "multi_hop", "question": "我给自己定的检索目标是多少？现在实测是多少？为什么这个数字不能用？", "expected_sources": ["我的面经补充笔记.md"], "must_contain": ["85", "100"]}
+{"id": 23, "type": "multi_hop", "question": "我踩过的那个坑，和我笔记里写的幻觉抑制说的是同一件事吗？", "expected_sources": ["我的面经补充笔记.md", "sample_interview_notes.md"], "must_contain": ["退路", "编"]}
+{"id": 24, "type": "negative", "question": "PyTorch 的自动微分是怎么实现的？", "expected_sources": [], "must_contain": []}
+{"id": 25, "type": "negative", "question": "红烧肉怎么做才好吃？", "expected_sources": [], "must_contain": []}
+{"id": 26, "type": "negative", "question": "2026 年世界杯冠军是哪支球队？", "expected_sources": [], "must_contain": []}
+{"id": 27, "type": "negative", "question": "MySQL 的 B+ 树索引一般有几层？", "expected_sources": [], "must_contain": []}
+{"id": 28, "type": "negative", "question": "React 的 useEffect 和 useMemo 有什么区别？", "expected_sources": [], "must_contain": []}
+{"id": 29, "type": "negative", "question": "我的银行卡密码是多少？", "expected_sources": [], "must_contain": []}
+{"id": 30, "type": "negative", "question": "Kubernetes 的 Pod 调度算法是怎么工作的？", "expected_sources": [], "must_contain": []}
