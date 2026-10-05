@@ -1,0 +1,12 @@
+{"question": "BM25 里的 IDF 是干什么用的？", "expected_source": "sample_interview_notes.md", "must_contain": ["IDF", "出现越少"]}
+{"question": "切块时的 overlap 有什么作用？", "expected_source": "sample_interview_notes.md", "must_contain": ["切口", "上下文"]}
+{"question": "为什么要做混合检索，两路检索各自擅长什么？", "expected_source": "sample_interview_notes.md", "must_contain": ["精确", "语义"]}
+{"question": "RAG 的效果应该怎么评测？有哪些指标？", "expected_source": "sample_interview_notes.md", "must_contain": ["Hit@k", "MRR"]}
+{"question": "怎么抑制大模型的幻觉？", "expected_source": "sample_interview_notes.md", "must_contain": ["引用", "资料"]}
+{"question": "Agent 里的 function calling 是怎么工作的？", "expected_source": "sample_interview_notes.md", "must_contain": ["工具", "调用"]}
+{"question": "有哪些控制大模型调用成本的办法？", "expected_source": "sample_interview_notes.md", "must_contain": ["缓存", "token"]}
+{"question": "流式输出能改善什么？为什么它有效？", "expected_source": "sample_interview_notes.md", "must_contain": ["首字", "延迟"]}
+{"question": "为什么 BM25 分数和余弦相似度不能直接相加？", "expected_source": "sample_interview_notes.md", "must_contain": ["归一化", "无上界"]}
+{"question": "什么时候应该引入向量数据库？", "expected_source": "sample_interview_notes.md", "must_contain": ["数据量", "并发"]}
+{"question": "要求模型输出 JSON 时要注意什么？", "expected_source": "sample_interview_notes.md", "must_contain": ["JSON", "校验"]}
+{"question": "延迟优化有哪些手段，该看哪个指标？", "expected_source": "sample_interview_notes.md", "must_contain": ["P95", "并行"]}
