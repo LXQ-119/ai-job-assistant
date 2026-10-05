@@ -1,4 +1,4 @@
-﻿# AI 求职助手
+# AI 求职助手
 
 一个用于**面试展示**的 AI 应用项目：简历结构化解析 + 面经知识库问答（RAG）+ 调用成本监控。
 
@@ -63,12 +63,31 @@ Git        D:\Git                  （已加入 PATH）
 
 ---
 
+## 效果（真实评测数字）
+
+评测集 30 条：改写问法 16 / 跨小节 7 / 负例 7。跑法 `python -m scripts.eval_rag`。
+
+```
+负例拒答率      0.00%  →  100.00%     （修标点污染 + 换二元组分词 + 加最低分阈值）
+关键词覆盖率    84.38%  →   93.75%
+MRR             0.935  →    0.859     （二元组分词带来少量噪音匹配，已知代价）
+```
+
+> ⚠️ **Hit@k 目前是 100%，但这个数字没有区分度** —— 知识库里只有 3 个文件，
+> 翻出任何一张卡都来自这 3 个文件。要等语料变多，这个指标才有意义。
+>
+> 三次踩坑的完整记录（标点污染分数 / 分词不一致让答案消失 / 评测集骗了我）
+> 见 [INTERVIEW.md 第七节](INTERVIEW.md)。
+
+---
+
 ## 快速开始
 
 完整说明见 **[SETUP.md](SETUP.md)**。
 
 ```powershell
-cd C:\Users\17839\Desktop\ai-job-assistant
+git clone https://github.com/LXQ-119/ai-job-assistant.git
+cd ai-job-assistant
 
 # 1) 离线测试（不需要 Key、不联网、不花钱）
 python -m pytest -v
@@ -83,6 +102,16 @@ python -m streamlit run ui/app.py  # 终端 B：前端 → http://localhost:8501
 ```
 
 首次使用：前端左侧点「重建知识库索引」，然后到问答页提问。
+
+### 常用诊断脚本
+
+```powershell
+python -m scripts.ask "你的问题"      # 命令行提问（不重建索引）
+python -m scripts.kb_rebuild          # 重建知识库索引
+python -m scripts.eval_rag            # 跑评测集，出 Hit@k / MRR / 拒答率
+python -m scripts.sweep_threshold     # 扫描最低分阈值该划在哪
+python -m scripts.show_kb             # 把知识库拆开看（文件 → 卡片）
+```
 
 ---
 
@@ -104,7 +133,14 @@ ai-job-assistant/
 │       └── resume.py        # 简历结构化（校验失败自动修复重试）
 ├── ui/app.py                # Streamlit 前端（三个标签页）
 ├── scripts/
-│   ├── eval_rag.py          # 检索评测：产出 Hit@k / MRR（简历数字的来源）
+│   ├── eval_rag.py          # 检索评测：产出 Hit@k / MRR / 拒答率（简历数字的来源）
+│   ├── sweep_threshold.py   # 扫描最低分阈值：正例最低分 vs 负例最高分
+│   ├── ask.py               # 命令行提问
+│   ├── kb_rebuild.py        # 重建索引 + 验证
+│   ├── show_kb.py           # 把知识库从文件夹拆到卡片，逐层展示
+│   ├── show_score.py        # 把一次检索的 BM25 得分拆到每个词
+│   ├── why_missed.py        # 诊断"明明有却说没有"
+│   ├── compare_fix.py       # 分词方案 A/B/C 对照实验
 │   ├── setup.ps1            # 一键初始化（本机未使用 venv，见 SETUP.md）
 │   ├── run_api.ps1
 │   └── run_ui.ps1
@@ -112,7 +148,7 @@ ai-job-assistant/
 │   ├── knowledge/           # 知识库语料（放你自己的面经笔记）
 │   ├── resumes/             # 示例简历
 │   └── eval/                # 评测集（问题 + 正确来源 + 必含关键词）
-├── tests/test_core.py       # 15 个离线单元测试
+├── tests/test_core.py       # 16 个离线单元测试
 ├── requirements.txt
 ├── Dockerfile
 └── SETUP.md / INTERVIEW.md
