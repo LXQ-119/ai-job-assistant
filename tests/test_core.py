@@ -61,21 +61,72 @@ def test_chunk_ignores_headings_inside_code_block():
 # ---------------------------------------------------------------------------
 
 
-def test_bm25_ranks_relevant_chunk_first():
-    """BM25 应该把含有关键词的块排在前面。"""
+def test_bm25_ranks_relevant_chunk_first(monkeypatch):
+    """BM25 应该把含有关键词的块排在前面。
+
+    这里显式把 MIN_BM25_SCORE 关掉，原因很重要：
+
+        最低分阈值是**按语料标定**出来的绝对分数（当前真实语料取 11.5）。
+        而这个测试的语料只有 2 个块，BM25 分数天然只有个位数 ——
+        两者根本不可比。
+
+    BM25 的原始分依赖语料规模（IDF 公式里就含 N），
+    所以**绝对阈值不能跨语料复用**，换语料必须重新标定。
+    这个测试改成"只测排序"，阈值行为由
+    test_min_score_threshold_rejects_weak_matches 单独覆盖。
+    """
+    from app.config import get_settings
+
+    monkeypatch.setenv("MIN_BM25_SCORE", "0")
+    get_settings.cache_clear()
+    try:
+        kb = KnowledgeBase()
+        chunks = chunk_text(
+            "# 苹果\n\n苹果是一种水果，富含维生素。\n\n# 汽车\n\n汽车是交通工具，需要汽油。",
+            source="fruits.md",
+            size=200,
+            overlap=0,
+        )
+        kb.add_chunks(chunks)
+
+        results = kb.search("汽车需要什么燃料", top_k=2)
+
+        assert results, "检索不应为空"
+        assert "汽车" in results[0].chunk.heading
+    finally:
+        get_settings.cache_clear()
+
+
+def test_min_score_threshold_rejects_weak_matches(monkeypatch):
+    """分数低于阈值的检索结果，必须被判定为"没找到"。
+
+    为什么必须有这道门槛：
+        BM25 对任何问题都会给出一个"最高分"，哪怕全是噪声 ——
+        因为总有一张卡恰好撞上一两个常见字。没有门槛的话，
+        系统永远能"找到"东西，于是永远不说"没找到"，也就永远在骗用户。
+    """
+    from app.config import get_settings
+
     kb = KnowledgeBase()
-    chunks = chunk_text(
-        "# 苹果\n\n苹果是一种水果，富含维生素。\n\n# 汽车\n\n汽车是交通工具，需要汽油。",
-        source="fruits.md",
-        size=200,
-        overlap=0,
+    kb.add_chunks(
+        chunk_text("# 苹果\n\n苹果是一种水果。", source="a.md", size=200, overlap=0)
     )
-    kb.add_chunks(chunks)
 
-    results = kb.search("汽车需要什么燃料", top_k=2)
+    # 阈值高得离谱 → 什么都过不了 → 返回空
+    monkeypatch.setenv("MIN_BM25_SCORE", "999")
+    get_settings.cache_clear()
+    try:
+        assert kb.search("苹果", top_k=2) == []
+    finally:
+        get_settings.cache_clear()
 
-    assert results, "检索不应为空"
-    assert "汽车" in results[0].chunk.heading
+    # 阈值关掉 → 同样的查询正常返回
+    monkeypatch.setenv("MIN_BM25_SCORE", "0")
+    get_settings.cache_clear()
+    try:
+        assert kb.search("苹果", top_k=2)
+    finally:
+        get_settings.cache_clear()
 
 
 def test_no_match_returns_empty_instead_of_random_chunks():
