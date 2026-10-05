@@ -1,0 +1,54 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "① 后端 FastAPI（端口 8000）",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "app.main",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": { "PYTHONIOENCODING": "utf-8" }
+    },
+    {
+      "name": "② 前端 Streamlit（端口 8501）",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "streamlit",
+      "args": ["run", "ui/app.py"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "env": { "PYTHONIOENCODING": "utf-8" }
+    },
+    {
+      "name": "③ Agent 01 加法（离线模式 · 不需要 Key）",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/examples/01_add_agent.py",
+      "args": ["3 加 5 等于多少", "--mock"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "env": { "PYTHONIOENCODING": "utf-8" }
+    },
+    {
+      "name": "④ Agent 01 加法（真模型 · 需要 .env 里的 Key）",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/examples/01_add_agent.py",
+      "args": ["3 加 5 等于多少"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "env": { "PYTHONIOENCODING": "utf-8" }
+    },
+    {
+      "name": "⑤ 当前打开的文件",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "env": { "PYTHONIOENCODING": "utf-8" }
+    }
+  ]
+}

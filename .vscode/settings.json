@@ -1,0 +1,38 @@
+{
+  "// 说明": "本机没有用虚拟环境，Python 装在 E:\\dev\\Python312。下面直接写死解释器路径，绕开 VS Code 的自动发现（它在这台机器上扫描不到）。",
+
+  "python.defaultInterpreterPath": "E:\\dev\\Python312\\python.exe",
+
+  "// defaultEnvManager": "新版 VS Code 用 ms-python.vscode-python-envs 管理环境，默认想创建虚拟环境（venv）。这里改成用系统 Python，因为本项目的 Python 是专装的、不需要 venv。",
+  "python-envs.defaultEnvManager": "ms-python.python:system",
+
+  "files.encoding": "utf8",
+  "files.eol": "\r\n",
+
+  "python.languageServer": "Pylance",
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.autoImportCompletions": true,
+
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": ["tests"],
+
+  "// activateEnvironment": "本机没有 venv，所以关掉终端自动激活",
+  "python.terminal.activateEnvironment": false,
+
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/*.pyc": true
+  },
+
+  "[python]": {
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.rulers": [100]
+  },
+
+  "[markdown]": {
+    "editor.wordWrap": "on"
+  }
+}

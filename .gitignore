@@ -1,0 +1,29 @@
+﻿# ---- 密钥：绝对不能提交 ----
+.env
+.env.local
+*.key
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- 运行时产物（可重新生成，不该进仓库）----
+data/index/
+reports/
+.tmp/
+*.log
+
+# ---- 编辑器 / 系统（.vscode/ 特意不忽略：launch.json 是 F5 调试配置，属于项目资产）----
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- Streamlit ----
+.streamlit/secrets.toml
