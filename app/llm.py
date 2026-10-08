@@ -45,6 +45,10 @@ class LLMResult:
     cached_tokens: int
     latency_ms: float
     cost_usd: float
+    # 模型要求调用的工具（function calling）。None 表示它没要求调工具。
+    # 注意：这里只是「模型的请求」，工具**还没有被执行** ——
+    # 执行是业务层的事，模型碰不到你的代码。
+    tool_calls: list[dict] | None = None
 
 
 _client_cache: dict[tuple[str, str, float], OpenAI] = {}
@@ -106,11 +110,15 @@ def chat(
     temperature: float | None = None,
     max_tokens: int | None = None,
     json_mode: bool = False,
+    tools: Sequence[dict] | None = None,
 ) -> LLMResult:
     """同步调用模型，带重试与埋点。
 
     json_mode=True 时要求模型输出 JSON 对象。注意：这只保证"是合法 JSON"，
     **不保证字段符合你的 schema**，所以调用方仍必须用 Pydantic 校验。
+
+    tools 传入工具说明书（JSON Schema 列表）时，模型可能不直接回答，
+    而是返回 tool_calls 要求调用工具。**它只能"要求"，真正执行的是调用方。**
     """
     settings = get_settings()
     used_model = model or settings.llm_model
@@ -130,13 +138,32 @@ def chat(
             }
             if json_mode:
                 kwargs["response_format"] = {"type": "json_object"}
+            if tools:
+                kwargs["tools"] = list(tools)
 
             response = _client().chat.completions.create(**kwargs)
 
             if not response.choices:
                 raise LLMError("模型返回了空 choices，通常是上游异常，请重试。")
 
-            text = response.choices[0].message.content or ""
+            message = response.choices[0].message
+            text = message.content or ""
+            raw_calls = getattr(message, "tool_calls", None)
+            tool_calls = (
+                [
+                    {
+                        "id": call.id,
+                        "type": "function",
+                        "function": {
+                            "name": call.function.name,
+                            "arguments": call.function.arguments,
+                        },
+                    }
+                    for call in raw_calls
+                ]
+                if raw_calls
+                else None
+            )
             prompt_tokens, completion_tokens, cached_tokens = _extract_usage(response.usage)
             latency_ms = (time.perf_counter() - started) * 1000
             cost = estimate_cost_usd(
@@ -162,6 +189,7 @@ def chat(
                 cached_tokens=cached_tokens,
                 latency_ms=latency_ms,
                 cost_usd=cost,
+                tool_calls=tool_calls,
             )
 
         except RETRYABLE_ERRORS as exc:

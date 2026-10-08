@@ -15,7 +15,18 @@ import json
 import os
 import re
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from typing import Iterator
+
+from dotenv import load_dotenv
+
+# 教具脚本设计成能独立运行（不 import app/ 里的东西），所以自己加载 .env。
+#
+# 这是真实踩到的坑：只有 app/config.py 里调用了 load_dotenv，
+# 而这里的 real_model_respond 是直接 os.getenv("LLM_API_KEY") 读环境变量。
+# 结果网页上默认开着"真模型"，却一直报"没有读到 LLM_API_KEY" ——
+# 明明 .env 里填了 Key。**配置必须只有一个加载入口，否则一定会漏。**
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # ===========================================================================
 # 工具

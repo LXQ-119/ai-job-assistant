@@ -22,7 +22,15 @@ import json
 import os
 import re
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from typing import Iterator
+
+from dotenv import load_dotenv
+
+# 同 agent_core.py：教具独立运行，自己加载 .env。
+# 不加载的话 real_model_respond 读不到 LLM_API_KEY，
+# 而网页上"使用真模型"是**默认打开**的 —— 用户一进来就会看到报错。
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # ===========================================================================
 # 四个工具

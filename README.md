@@ -25,8 +25,27 @@ Git        D:\Git                  （已加入 PATH）
 这个项目把两件事一起做掉：
 
 1. **简历解析** —— 把 PDF/Word 简历变成结构化数据（技能、项目、可量化亮点）
-2. **面经问答** —— 把自己的面经笔记做成知识库，提问即得答案，**每个答案都带引用来源**
-3. **成本与效果监控** —— 记录每次调用的 token、成本、延迟分位数，并用评测集量化检索效果
+2. **面经问答（RAG）** —— 把自己的面经笔记做成知识库，提问即得答案，**每个答案都带引用来源**
+3. **智能助手（Agentic RAG）** —— 一个对话框里，模型自己判断：该查我的笔记、该调计算器，还是直接回答
+4. **成本与效果监控** —— 记录每次调用的 token、成本、延迟分位数，并用评测集量化检索效果
+
+### 三条路线的区别（这是本项目最值得看的部分）
+
+```
+纯大模型     问题 → 模型直接答
+             问"我给自己定的检索目标是多少" → 它不知道，只能编
+
+写死的 RAG   问题 →【强制查笔记】→ 查到就答 / 查不到说"没有"
+             问"3 减 2 等于几" → "笔记里没有提到"   ← 明明会却答不了
+
+Agentic RAG  问题 → 模型先判断 → ├─ 查我的笔记（带 [编号] 引用）
+                                ├─ 调计算器（精确计算）
+                                └─ 我自己就会（必须标注"不来自你的笔记"）
+```
+
+**关键不是"多两个工具"，而是"来源必须可分辨"** ——
+两条路都能走通，但用户必须能一眼看出哪句话有出处、哪句话没有，
+否则 Agent 的灵活性会把 RAG 的可追溯性吃干净。
 
 ---
 
@@ -129,17 +148,33 @@ ai-job-assistant/
 │   └── services/
 │       ├── documents.py     # 文档加载（md/txt/pdf/docx）+ 三层切块
 │       ├── retriever.py     # BM25 + 向量 + 混合融合 + 持久化
-│       ├── rag.py           # 检索增强问答（带引用）
+│       ├── rag.py           # 写死的 RAG：先检索 → 拼提示词 → 生成（带引用）
+│       ├── agentic.py       # Agentic RAG：模型自己决定查笔记 / 算数 / 直接答
 │       └── resume.py        # 简历结构化（校验失败自动修复重试）
-├── ui/app.py                # Streamlit 前端（三个标签页）
+├── ui/
+│   ├── app.py               # 入口 + 导航（用 st.navigation 手工分组）
+│   ├── style.py             # 统一视觉层：CSS 主题 + 卡片/英雄区组件
+│   ├── common.py            # 页面共用：后端连接、侧边栏、引用渲染
+│   └── views/               # 每个页面一个文件
+│       ├── chat.py          #   🎯 产品 · 面经问答
+│       ├── agentic.py       #   🎯 产品 · 智能助手（03）
+│       ├── resume.py        #   🎯 产品 · 简历解析
+│       ├── metrics.py       #   🎯 产品 · 评测与成本
+│       ├── agent_single.py  #   🎓 教学 · 01 单工具 Agent
+│       └── agent_multi.py   #   🎓 教学 · 02 多工具 Agent
+├── examples/                # 教学核心（命令行版，和 views/ 共用同一份逻辑）
+│   ├── agent_core.py        #   01 的核心：单工具 + 决策循环
+│   ├── multi_tool_core.py   #   02 的核心：4 个工具 + 错误处理
+│   └── 03_agentic_rag.py    #   03 的命令行版
 ├── scripts/
 │   ├── eval_rag.py          # 检索评测：产出 Hit@k / MRR / 拒答率（简历数字的来源）
 │   ├── sweep_threshold.py   # 扫描最低分阈值：正例最低分 vs 负例最高分
 │   ├── ask.py               # 命令行提问
 │   ├── kb_rebuild.py        # 重建索引 + 验证
+│   ├── api_smoke.py         # 接口冒烟测试（用 Python 发请求，避开 PowerShell 编码坑）
 │   ├── show_kb.py           # 把知识库从文件夹拆到卡片，逐层展示
 │   ├── show_score.py        # 把一次检索的 BM25 得分拆到每个词
-│   ├── why_missed.py        # 诊断"明明有却说没有"
+│   ├── why_missed.py        # 诊断「明明有却说没有」
 │   ├── compare_fix.py       # 分词方案 A/B/C 对照实验
 │   ├── setup.ps1            # 一键初始化（本机未使用 venv，见 SETUP.md）
 │   ├── run_api.ps1
@@ -168,6 +203,7 @@ ai-job-assistant/
 | GET | `/kb/status` | 索引状态、来源文件、降级告警 |
 | POST | `/kb/query` | 知识库问答（非流式） |
 | POST | `/kb/stream` | 知识库问答（**SSE 流式**，先推引用再推正文） |
+| POST | `/agent/ask` | **Agentic RAG**：模型自己决定查笔记 / 算数 / 直接答，返回完整决策轨迹 |
 | POST | `/resume/parse` | 解析简历文本 |
 | POST | `/resume/upload` | 上传简历文件（md/txt/pdf/docx）并解析 |
 

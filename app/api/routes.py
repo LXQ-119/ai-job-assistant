@@ -31,7 +31,7 @@ from ..schemas import (
     RagQueryRequest,
     ResumeTextRequest,
 )
-from ..services import rag, resume as resume_service
+from ..services import agentic, rag, resume as resume_service
 from ..services.documents import DocumentError, SUPPORTED_SUFFIXES
 from ..services.retriever import KB
 
@@ -175,6 +175,32 @@ def kb_stream(request: RagQueryRequest) -> StreamingResponse:
             "X-Accel-Buffering": "no",  # 让 Nginx 不要缓冲，否则流式会变成一次性返回
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Agentic RAG（03）：模型自己决定走哪条路
+# ---------------------------------------------------------------------------
+
+
+@router.post("/agent/ask", summary="Agentic RAG：模型自己决定查笔记 / 算数 / 直接答")
+async def agent_ask(request: RagQueryRequest) -> dict:
+    """跑一次 Agentic RAG，返回完整的决策过程。
+
+    故意不做流式：Agent 可能调用多轮工具，中间过程比最终答案更值得看，
+    一次性返回整条轨迹反而更好展示（前端能把每一步都渲染出来）。
+    """
+    # run() 内部会连续调用模型（每次几百毫秒到几秒），是同步阻塞的。
+    # 直接在这里跑会卡住事件循环，其他请求全部排队 —— 所以丢进线程池。
+    def _run() -> dict:
+        events = list(agentic.run(request.question))
+        return {
+            "question": request.question,
+            "events": events,
+            "final": next((e for e in events if e["type"] == "final"), None),
+            "error": next((e for e in events if e["type"] == "error"), None),
+        }
+
+    return await run_in_threadpool(_run)
 
 
 # ---------------------------------------------------------------------------
