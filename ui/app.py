@@ -46,8 +46,7 @@ nav = st.navigation(
             st.Page("views/metrics.py", title="评测与成本", icon="📊"),
         ],
         "🎓 教学演示": [
-            st.Page("views/agent_single.py", title="01 单工具 Agent", icon="🤖"),
-            st.Page("views/agent_multi.py", title="02 多工具 Agent", icon="🧮"),
+            st.Page("views/agent_lab.py", title="Agent 原理演示", icon="🎓"),
         ],
     }
 )

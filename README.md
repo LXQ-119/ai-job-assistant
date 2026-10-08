@@ -160,8 +160,7 @@ ai-job-assistant/
 │       ├── agentic.py       #   🎯 产品 · 智能助手（03）
 │       ├── resume.py        #   🎯 产品 · 简历解析
 │       ├── metrics.py       #   🎯 产品 · 评测与成本
-│       ├── agent_single.py  #   🎓 教学 · 01 单工具 Agent
-│       └── agent_multi.py   #   🎓 教学 · 02 多工具 Agent
+│       └── agent_lab.py     #   🎓 教学 · Agent 原理演示（01 / 02 两个标签页）
 ├── examples/                # 教学核心（命令行版，和 views/ 共用同一份逻辑）
 │   ├── agent_core.py        #   01 的核心：单工具 + 决策循环
 │   ├── multi_tool_core.py   #   02 的核心：4 个工具 + 错误处理
