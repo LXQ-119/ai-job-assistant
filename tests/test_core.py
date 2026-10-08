@@ -260,3 +260,112 @@ def test_profile_parsing_rejects_non_object():
     """返回数组之类的东西时要明确报错，而不是悄悄产出空数据。"""
     with pytest.raises(ValueError):
         _load_profile("[1, 2, 3]")
+
+
+# ---------------------------------------------------------------------------
+# 模型可插拔接入
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def isolated_runtime(monkeypatch):
+    """把运行时配置文件指到 data/runtime 下的一个测试文件。
+
+    为什么不用 pytest 的 `tmp_path`？因为**本机沙箱不允许在系统临时目录里建子目录**，
+    `tmp_path` fixture 会直接 PermissionError。
+    写到 `data/runtime/` 既安全（这个目录在 .gitignore 里，密钥不可能被提交），
+    又不会碰到真实的 model.json。
+    """
+    from app import providers
+
+    target = providers.get_settings().data_dir / "runtime" / "_pytest_model.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(providers, "runtime_path", lambda: target)
+    target.unlink(missing_ok=True)
+    yield providers
+    target.unlink(missing_ok=True)
+
+
+def test_provider_switch_roundtrip(isolated_runtime):
+    """切换模型后必须能原样读回来。
+
+    这是针对一个真实 bug 的回归测试：网页上从 deepseek-flash 切到
+    deepseek-v4-pro 之后，页面上的模型下拉框会回到列表第一个（flash），
+    用户再点一次「切换」就把 v4-pro 悄悄改回了 flash。
+    表现是「我明明切了，它又变回原来的」。
+
+    前端那半没法单测，但**后端这半必须保证存进去什么就读出来什么** ——
+    否则连排查的基准都没有。
+    """
+    providers = isolated_runtime
+
+    # 没写过运行时配置 → 用 .env 的默认值
+    assert providers.get_active().source == "env"
+
+    providers.save_runtime(
+        provider="deepseek",
+        base_url="https://api.deepseek.com",
+        api_key="sk-test",
+        model="deepseek-v4-pro",
+    )
+    active = providers.get_active()
+    assert active.source == "runtime"
+    assert active.model == "deepseek-v4-pro"
+    assert active.api_key == "sk-test"
+
+    # 再切回 flash，必须读回 flash（而不是粘在 v4-pro 上）
+    providers.save_runtime(
+        provider="deepseek",
+        base_url="https://api.deepseek.com",
+        api_key="sk-test",
+        model="deepseek-flash",
+    )
+    assert providers.get_active().model == "deepseek-flash"
+
+    # base_url 末尾多一个斜杠不能算成另一家
+    providers.save_runtime(
+        provider="deepseek",
+        base_url="https://api.deepseek.com/",
+        api_key="sk-test",
+        model="deepseek-v4-pro",
+    )
+    assert providers.get_active().base_url == "https://api.deepseek.com"
+
+    providers.clear_runtime()
+    assert providers.get_active().source == "env"
+
+
+def test_provider_key_fallback_only_for_same_url(isolated_runtime):
+    """Key 留空时：地址相同才沿用当前的，地址不同不能拿 A 家的 Key 去 B 家。"""
+    providers = isolated_runtime
+    active = providers.get_active()
+
+    assert providers.resolve_api_key(active.base_url, "") == active.api_key
+    assert providers.resolve_api_key(active.base_url + "/", "") == active.api_key
+    assert providers.resolve_api_key("https://api.openai.com/v1", "") == ""
+    assert providers.resolve_api_key(active.base_url, "sk-new") == "sk-new"
+    assert providers.resolve_api_key(active.base_url, "  sk-trim  ") == "sk-trim"
+
+
+def test_local_provider_does_not_need_key(isolated_runtime):
+    """本地模型（Ollama）不该因为没填 Key 就被挡住。"""
+    providers = isolated_runtime
+    providers.save_runtime(
+        provider="ollama",
+        base_url="http://127.0.0.1:11434/v1",
+        api_key="",
+        model="qwen2.5:7b",
+    )
+    active = providers.get_active()
+
+    assert active.needs_key is False
+    assert active.effective_key == "not-needed"
+
+    # 但需要 Key 的服务商没填，就得老老实实报出来
+    providers.save_runtime(
+        provider="deepseek",
+        base_url="https://api.deepseek.com",
+        api_key="",
+        model="deepseek-flash",
+    )
+    assert providers.get_active().effective_key == ""

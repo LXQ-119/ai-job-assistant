@@ -87,11 +87,49 @@ base_url = c1.text_input(
     key=f"url_{preset['key']}",
     placeholder="https://api.example.com/v1",
 )
-default_model = preset["models"][0] if preset["models"] else ""
+is_active_preset = preset["key"] == active["provider"]
+
 if preset["models"]:
-    model = c2.selectbox("模型名", preset["models"], key=f"model_{preset['key']}")
+    models = list(preset["models"])
+
+    # ★ 默认必须选中「当前正在用的那个」，而不是列表里的第一个。
+    #
+    # 不加这个会出一个很隐蔽的 bug（真实踩到过）：
+    #   用户切到 deepseek-v4-pro（切换成功）
+    #   → 刷新页面 / 新开标签 → 下拉框回到列表第一个（deepseek-flash）
+    #   → 用户没细看，又点了一次「切换」
+    #   → 把 v4-pro 悄悄改回了 flash
+    # 用户看到的现象就是「我明明切了，它又变回原来的了」。
+    if is_active_preset and active["model"] in models:
+        default_model_index = models.index(active["model"])
+    else:
+        default_model_index = 0
+
+    model = c2.selectbox(
+        "模型名",
+        models,
+        index=default_model_index,
+        # key 里带上「当前生效的模型」：
+        #   切换成功后 key 变化 → Streamlit 建一个新控件 → 自动重新初始化成新值。
+        # 如果 key 固定不变，session_state 里的旧值会一直压着 index，
+        # 于是「切了之后下拉框还是旧的」—— 这正是那个 bug 的另一半。
+        key=f"model_{preset['key']}_{active['model']}",
+        accept_new_options=True,  # 列表里没有的也能手输
+        help="可以直接输入列表之外的模型名",
+    )
 else:
-    model = c2.text_input("模型名", key=f"model_{preset['key']}", placeholder="模型名")
+    model = c2.text_input(
+        "模型名", key=f"model_{preset['key']}", placeholder="模型名"
+    )
+
+# 选的和正在用的不一致时明确提示 —— 避免「以为切了其实没切」，或者反过来
+if is_active_preset and model != active["model"]:
+    st.warning(
+        f"⚠️ 当前**正在用**的是 `{active['model']}`，"
+        f"你选的是 `{model}`。点下面的「切换到这个模型」才会生效。"
+    )
+elif is_active_preset:
+    st.caption(f"✅ 现在选的就是正在用的 `{model}`，点「测试连接」可以直接验一下它通不通。")
 
 if preset["needs_key"]:
     same_as_active = base_url.strip().rstrip("/").lower() == active["base_url"].rstrip("/").lower()
