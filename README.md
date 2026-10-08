@@ -27,7 +27,8 @@ Git        D:\Git                  （已加入 PATH）
 1. **简历解析** —— 把 PDF/Word 简历变成结构化数据（技能、项目、可量化亮点）
 2. **面经问答（RAG）** —— 把自己的面经笔记做成知识库，提问即得答案，**每个答案都带引用来源**
 3. **智能助手（Agentic RAG）** —— 一个对话框里，模型自己判断：该查我的笔记、该调计算器，还是直接回答
-4. **成本与效果监控** —— 记录每次调用的 token、成本、延迟分位数，并用评测集量化检索效果
+4. **模型可插拔** —— 网页上换一家模型，**立即生效不用重启**。内置 DeepSeek / OpenAI / 通义 / 智谱 / Kimi / 硅基流动 / 本地 Ollama
+5. **成本与效果监控** —— 记录每次调用的 token、成本、延迟分位数，并用评测集量化检索效果
 
 ### 三条路线的区别（这是本项目最值得看的部分）
 
@@ -140,7 +141,8 @@ python -m scripts.show_kb             # 把知识库拆开看（文件 → 卡�
 ai-job-assistant/
 ├── app/
 │   ├── config.py            # .env 集中配置 + DeepSeek 价格表 + 峰谷计价
-│   ├── llm.py               # 模型网关：重试、流式、向量化、埋点
+│   ├── providers.py         # 可插拔的模型接入：8 个服务商预设 + 运行时切换
+│   ├── llm.py               # 模型网关：重试、流式、工具调用、向量化、埋点
 │   ├── metrics.py           # 线程安全的调用记录与分位数统计
 │   ├── schemas.py           # Pydantic 数据结构（自动生成接口文档）
 │   ├── main.py              # FastAPI 应用入口
@@ -160,17 +162,20 @@ ai-job-assistant/
 │       ├── agentic.py       #   🎯 产品 · 智能助手（03）
 │       ├── resume.py        #   🎯 产品 · 简历解析
 │       ├── metrics.py       #   🎯 产品 · 评测与成本
+│       ├── settings.py      #   ⚙️ 设置 · 模型设置（一键换模型）
 │       └── agent_lab.py     #   🎓 教学 · Agent 原理演示（01 / 02 两个标签页）
 ├── examples/                # 教学核心（命令行版，和 views/ 共用同一份逻辑）
 │   ├── agent_core.py        #   01 的核心：单工具 + 决策循环
 │   ├── multi_tool_core.py   #   02 的核心：4 个工具 + 错误处理
-│   └── 03_agentic_rag.py    #   03 的命令行版
+│   ├── 03_agentic_rag.py    #   03 的命令行版
+│   └── 04_how_it_decides.py #   把原始对话摊开：看模型到底返回了什么
 ├── scripts/
 │   ├── eval_rag.py          # 检索评测：产出 Hit@k / MRR / 拒答率（简历数字的来源）
 │   ├── sweep_threshold.py   # 扫描最低分阈值：正例最低分 vs 负例最高分
 │   ├── ask.py               # 命令行提问
 │   ├── kb_rebuild.py        # 重建索引 + 验证
 │   ├── api_smoke.py         # 接口冒烟测试（用 Python 发请求，避开 PowerShell 编码坑）
+│   ├── provider_smoke.py    # 模型切换的端到端测试 + 密钥不泄露检查
 │   ├── show_kb.py           # 把知识库从文件夹拆到卡片，逐层展示
 │   ├── show_score.py        # 把一次检索的 BM25 得分拆到每个词
 │   ├── why_missed.py        # 诊断「明明有却说没有」
@@ -203,6 +208,10 @@ ai-job-assistant/
 | POST | `/kb/query` | 知识库问答（非流式） |
 | POST | `/kb/stream` | 知识库问答（**SSE 流式**，先推引用再推正文） |
 | POST | `/agent/ask` | **Agentic RAG**：模型自己决定查笔记 / 算数 / 直接答，返回完整决策轨迹 |
+| GET | `/providers` | 可选的服务商预设 + 当前生效的配置（Key 已打码） |
+| POST | `/providers/switch` | **切换模型，立即生效不用重启** |
+| POST | `/providers/test` | 测试连接（真的发一次请求，**只测不写**） |
+| POST | `/providers/reset` | 回到 `.env` 里的默认模型 |
 | POST | `/resume/parse` | 解析简历文本 |
 | POST | `/resume/upload` | 上传简历文件（md/txt/pdf/docx）并解析 |
 

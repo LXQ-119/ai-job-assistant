@@ -45,6 +45,9 @@ nav = st.navigation(
             st.Page("views/resume.py", title="简历解析", icon="📄"),
             st.Page("views/metrics.py", title="评测与成本", icon="📊"),
         ],
+        "⚙️ 设置": [
+            st.Page("views/settings.py", title="模型设置", icon="⚙️"),
+        ],
         "🎓 教学演示": [
             st.Page("views/agent_lab.py", title="Agent 原理演示", icon="🎓"),
         ],

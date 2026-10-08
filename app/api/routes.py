@@ -12,14 +12,16 @@ from __future__ import annotations
 
 import json
 import tempfile
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
+from .. import providers
 from ..config import get_settings, mask_secret
-from ..llm import LLMError, describe_connection
+from ..llm import LLMError, chat, describe_connection
 from ..metrics import METRICS
 from ..schemas import (
     HealthResponse,
@@ -27,6 +29,8 @@ from ..schemas import (
     IndexResponse,
     MetricsResponse,
     ParseResumeResponse,
+    ProviderSwitchRequest,
+    ProviderTestResponse,
     RagAnswer,
     RagQueryRequest,
     ResumeTextRequest,
@@ -46,10 +50,12 @@ router = APIRouter()
 @router.get("/health", response_model=HealthResponse, summary="健康检查")
 def health() -> HealthResponse:
     settings = get_settings()
+    active = providers.get_active()
     return HealthResponse(
         status="ok",
-        model=settings.llm_model,
-        api_key_configured=bool(settings.llm_api_key),
+        model=active.model,
+        provider=active.name,
+        api_key_configured=bool(active.effective_key),
         embedding_backend=settings.embedding_backend,
         knowledge_chunks=len(KB),
     )
@@ -115,8 +121,6 @@ def _safe_paths(raw_paths: list[str]) -> list[Path]:
 
 @router.post("/kb/index", response_model=IndexResponse, summary="为知识库建索引")
 def kb_index(request: IndexRequest) -> IndexResponse:
-    import time
-
     started = time.perf_counter()
     try:
         paths = _safe_paths(request.paths) if request.paths else []
@@ -174,6 +178,97 @@ def kb_stream(request: RagQueryRequest) -> StreamingResponse:
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",  # 让 Nginx 不要缓冲，否则流式会变成一次性返回
         },
+    )
+
+
+# ---------------------------------------------------------------------------
+# 模型服务商（可插拔接入）
+# ---------------------------------------------------------------------------
+
+
+@router.get("/providers", summary="可选的服务商预设 + 当前生效的配置")
+def list_providers() -> dict:
+    active = providers.get_active()
+    return {
+        "active": active.to_public(),
+        "presets": [
+            {
+                "key": preset.key,
+                "name": preset.name,
+                "base_url": preset.base_url,
+                "models": preset.models,
+                "needs_key": preset.needs_key,
+                "note": preset.note,
+            }
+            for preset in providers.PRESETS.values()
+        ],
+        "runtime_file": str(providers.runtime_path()),
+    }
+
+
+@router.post("/providers/switch", summary="切换模型（立即生效，不用重启）")
+def switch_provider(request: ProviderSwitchRequest) -> dict:
+    if not request.base_url.startswith(("http://", "https://")):
+        raise HTTPException(
+            status_code=400, detail="base_url 必须以 http:// 或 https:// 开头"
+        )
+
+    providers.save_runtime(
+        provider=request.provider,
+        base_url=request.base_url,
+        api_key=request.api_key,
+        model=request.model,
+    )
+    return {"ok": True, "active": providers.get_active().to_public()}
+
+
+@router.post("/providers/reset", summary="回到 .env 里的默认模型")
+def reset_provider() -> dict:
+    providers.clear_runtime()
+    return {"ok": True, "active": providers.get_active().to_public()}
+
+
+@router.post(
+    "/providers/test",
+    response_model=ProviderTestResponse,
+    summary="测试连接（真的发一次最小请求）",
+)
+def test_provider(request: ProviderSwitchRequest) -> ProviderTestResponse:
+    """只测通不通，**不写入配置**。
+
+    顺序很重要：先测、再切。否则用户填错一个字段就把能用的配置覆盖掉了，
+    而且还得自己想起来原来是什么。
+    """
+    started = time.perf_counter()
+    try:
+        result = chat(
+            [{"role": "user", "content": "只回复两个字：可用"}],
+            purpose="provider_test",
+            model=request.model,
+            temperature=0,
+            # 这个值必须给得宽松。真实踩到的坑：
+            # deepseek-flash 在正式回答之前会先生成**推理 token** ——
+            # 实测让它回"可用"两个字，completion_tokens 用了 37。
+            # 所以 max_tokens=16 或 64 时，模型还没来得及说正文就被截断，
+            # 返回空字符串，而且**没有任何报错**。
+            # （现在 app/llm.py 会把这种情况转成显式异常，但这里也别贴着边设。）
+            max_tokens=512,
+            override_base_url=request.base_url,
+            override_api_key=request.api_key,
+        )
+    except LLMError as exc:
+        return ProviderTestResponse(
+            ok=False,
+            message=str(exc),
+            latency_ms=round((time.perf_counter() - started) * 1000, 1),
+        )
+
+    return ProviderTestResponse(
+        ok=True,
+        message="连接成功",
+        latency_ms=round(result.latency_ms, 1),
+        reply=result.text.strip()[:100],
+        model=result.model,
     )
 
 

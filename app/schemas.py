@@ -22,6 +22,7 @@ class ChatMessage(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     model: str
+    provider: str = ""
     api_key_configured: bool
     embedding_backend: str
     knowledge_chunks: int
@@ -113,3 +114,29 @@ class MetricsResponse(BaseModel):
     summary: dict
     recent: list[dict]
     usd_to_cny: float
+
+
+# ---------------------------------------------------------------------------
+# 模型服务商（可插拔接入）
+# ---------------------------------------------------------------------------
+
+
+class ProviderSwitchRequest(BaseModel):
+    """切换模型。
+
+    只要目标服务商兼容 OpenAI 协议，这三个字段就够了 ——
+    不需要为每家写适配器，因为 SDK 是同一套。
+    """
+
+    provider: str = Field(description="预设的 key，例如 deepseek / ollama / custom")
+    base_url: str = Field(min_length=4, description="接口地址，例如 https://api.deepseek.com")
+    model: str = Field(min_length=1, description="模型名，例如 deepseek-flash")
+    api_key: str = Field(default="", description="密钥。本地模型可以留空")
+
+
+class ProviderTestResponse(BaseModel):
+    ok: bool
+    message: str
+    latency_ms: float = 0.0
+    reply: str = ""
+    model: str = ""

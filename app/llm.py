@@ -1,8 +1,10 @@
 """LLM 网关：全项目**只有这一个文件**直接调用模型。
 
 为什么值得单独抽一层：
-1. 换供应商只改 .env —— openai SDK 兼容任何 OpenAI 协议的端点
-   （DeepSeek / 通义 / 硅基流动 / 本地 vLLM / Ollama 都能接）
+1. 换供应商只改配置 —— openai SDK 兼容任何 OpenAI 协议的端点
+   （DeepSeek / 通义 / 智谱 / 硅基流动 / 本地 vLLM / Ollama 都能接）。
+   而且现在支持**运行时切换**：网页上选好服务商，下一次调用立刻生效，不用重启。
+   见 app/providers.py
 2. 重试、超时、埋点、错误归一化都集中在这里，业务代码完全不用关心
 3. 单元测试时可以只 mock 这一层
 
@@ -24,8 +26,10 @@ from openai import (
     RateLimitError,
 )
 
-from .config import estimate_cost_usd, get_settings, is_peak_now, mask_secret
+from . import providers
+from .config import estimate_cost_usd, get_settings, is_peak_now
 from .metrics import METRICS
+from .providers import get_active
 from .schemas import ChatMessage
 
 # 这些异常值得重试；其余的（比如 401 鉴权失败、400 参数错误）重试只是浪费时间。
@@ -49,25 +53,51 @@ class LLMResult:
     # 注意：这里只是「模型的请求」，工具**还没有被执行** ——
     # 执行是业务层的事，模型碰不到你的代码。
     tool_calls: list[dict] | None = None
+    # 结束原因：stop=正常说完，length=被 max_tokens 截断，tool_calls=要调工具。
+    # length 值得警惕 —— 答案可能是半句话。
+    finish_reason: str = ""
 
 
 _client_cache: dict[tuple[str, str, float], OpenAI] = {}
 
 
-def _client() -> OpenAI:
-    """按 (base_url, api_key, timeout) 复用客户端，避免每次调用都新建连接池。"""
+def _is_local(url: str) -> bool:
+    """本地服务（Ollama / vLLM / LM Studio）不需要 Key。"""
+    return "127.0.0.1" in url or "localhost" in url or "0.0.0.0" in url
+
+
+def _client(*, override_base_url: str | None = None, override_api_key: str | None = None) -> OpenAI:
+    """按 (base_url, api_key, timeout) 复用客户端，避免每次调用都新建连接池。
+
+    缓存键里含 base_url 和 api_key —— 所以在网页上切了服务商之后，
+    下一次调用会自动新建客户端，**不需要重启服务**。
+
+    override_* 只在"测试连接"时用：验一下某个还没保存的配置通不通，
+    而**不覆盖当前正在用的配置**（否则填错一个字段就把能用的配置毁了）。
+    """
     settings = get_settings()
-    if not settings.llm_api_key:
+    active = get_active()
+
+    base_url = (override_base_url or active.base_url).strip().rstrip("/")
+    if override_api_key is None:
+        api_key = active.effective_key
+    else:
+        # 显式传了 key（哪怕是空串），就按传进来的算
+        key = override_api_key.strip()
+        api_key = key or ("not-needed" if _is_local(base_url) else "")
+
+    if not api_key:
         raise LLMError(
-            "没有读到 LLM_API_KEY。请把 .env.example 复制成 .env，"
-            "然后填入你的 DeepSeek API Key（Key 只在 .env 里，不要写进代码）。"
+            f"「{base_url}」还没有配 API Key。"
+            "可以打开网页上的「⚙️ 模型设置」填，或者改 .env 里的 LLM_API_KEY。"
         )
-    cache_key = (settings.llm_base_url, settings.llm_api_key, settings.llm_timeout_s)
+
+    cache_key = (base_url, api_key, settings.llm_timeout_s)
     client = _client_cache.get(cache_key)
     if client is None:
         client = OpenAI(
-            api_key=settings.llm_api_key,
-            base_url=settings.llm_base_url,
+            api_key=api_key,
+            base_url=base_url,
             timeout=settings.llm_timeout_s,
             max_retries=0,  # 重试由我们自己控制，见 chat()
         )
@@ -77,11 +107,7 @@ def _client() -> OpenAI:
 
 def describe_connection() -> str:
     """给日志/健康检查用的连接信息，密钥永远打码。"""
-    settings = get_settings()
-    return (
-        f"base_url={settings.llm_base_url} model={settings.llm_model} "
-        f"api_key={mask_secret(settings.llm_api_key)}"
-    )
+    return providers.describe()
 
 
 def _extract_usage(usage) -> tuple[int, int, int]:
@@ -111,6 +137,8 @@ def chat(
     max_tokens: int | None = None,
     json_mode: bool = False,
     tools: Sequence[dict] | None = None,
+    override_base_url: str | None = None,
+    override_api_key: str | None = None,
 ) -> LLMResult:
     """同步调用模型，带重试与埋点。
 
@@ -119,9 +147,11 @@ def chat(
 
     tools 传入工具说明书（JSON Schema 列表）时，模型可能不直接回答，
     而是返回 tool_calls 要求调用工具。**它只能"要求"，真正执行的是调用方。**
+
+    override_* 只在"测试连接"时用，不影响当前生效的配置。
     """
     settings = get_settings()
-    used_model = model or settings.llm_model
+    used_model = model or get_active().model
     payload = [m.model_dump() if isinstance(m, ChatMessage) else m for m in messages]
 
     started = time.perf_counter()
@@ -141,13 +171,29 @@ def chat(
             if tools:
                 kwargs["tools"] = list(tools)
 
-            response = _client().chat.completions.create(**kwargs)
+            response = _client(
+                override_base_url=override_base_url,
+                override_api_key=override_api_key,
+            ).chat.completions.create(**kwargs)
 
             if not response.choices:
                 raise LLMError("模型返回了空 choices，通常是上游异常，请重试。")
 
             message = response.choices[0].message
             text = message.content or ""
+            finish_reason = getattr(response.choices[0], "finish_reason", "") or ""
+
+            # max_tokens 太小的话，模型会在「还没说出话」的时候就被截断。
+            # 真实踩到的：max_tokens=16 时问它「回复两个字：可用」，
+            # content 是空字符串，completion_tokens 正好等于 16 ——
+            # **没有任何报错**，调用方拿到一个空答案，还以为是模型的问题。
+            # 这种"静默失败"必须变成显式异常，否则排查起来毫无线索。
+            if finish_reason == "length" and not text:
+                raise LLMError(
+                    f"模型输出被 max_tokens={kwargs['max_tokens']} 截断，返回内容为空"
+                    "（finish_reason=length）。请把这个值调大。"
+                )
+
             raw_calls = getattr(message, "tool_calls", None)
             tool_calls = (
                 [
@@ -190,6 +236,7 @@ def chat(
                 latency_ms=latency_ms,
                 cost_usd=cost,
                 tool_calls=tool_calls,
+                finish_reason=finish_reason,
             )
 
         except RETRYABLE_ERRORS as exc:
@@ -233,7 +280,7 @@ def chat_stream(
     代价是 usage 统计更麻烦——这里用 stream_options 让服务端在最后一段带上用量。
     """
     settings = get_settings()
-    used_model = model or settings.llm_model
+    used_model = model or get_active().model
     payload = [m.model_dump() if isinstance(m, ChatMessage) else m for m in messages]
 
     started = time.perf_counter()

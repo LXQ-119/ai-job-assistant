@@ -103,8 +103,13 @@ def sidebar(*, top_k_slider: bool = False) -> int:
         if health:
             if health["api_key_configured"]:
                 st.success(f"模型在线 ｜ `{health['model']}`", icon="✅")
+                if health.get("provider"):
+                    st.caption(
+                        f"服务商：{health['provider']}　·　"
+                        "换模型去左侧「⚙️ 模型设置」"
+                    )
             else:
-                st.error("未配置 LLM_API_KEY —— 请先填 `.env`")
+                st.error("当前服务商还没配 API Key —— 去「⚙️ 模型设置」填")
 
             c1, c2 = st.columns(2)
             c1.metric("知识库块数", health["knowledge_chunks"])
