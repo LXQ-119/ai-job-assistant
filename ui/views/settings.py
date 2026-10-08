@@ -94,13 +94,18 @@ else:
     model = c2.text_input("模型名", key=f"model_{preset['key']}", placeholder="模型名")
 
 if preset["needs_key"]:
+    same_as_active = base_url.strip().rstrip("/").lower() == active["base_url"].rstrip("/").lower()
     api_key = st.text_input(
         "API Key",
         type="password",
         key=f"key_{preset['key']}",
-        placeholder="sk-...（本地模型这一栏可以留空）",
-        help="Key 只会写进 data/runtime/model.json，不会进 git，也不会出现在日志里",
+        placeholder="留空 = 沿用当前生效的 Key" if same_as_active else "sk-...",
+        help="Key 只写进 data/runtime/model.json，不进 git、不进日志、不回传前端",
     )
+    if same_as_active and not api_key:
+        st.caption(
+            f"这一栏留空就行 —— 地址没变，会沿用当前生效的 Key（`{active['api_key_masked']}`）。"
+        )
 else:
     api_key = ""
     st.info("这个服务商不需要 API Key。", icon="🔓")

@@ -67,6 +67,20 @@ def main() -> None:
     print(f"  ok={good['ok']}  {good['latency_ms']} ms  模型回：{good['reply'][:40]!r}")
     print("  " + ("✅ 连通" if good["ok"] else f"❌ {good['message'][:100]}"))
 
+    print("\n【2c】测试连接 —— Key 留空，但地址和当前一致")
+    fallback = httpx.post(
+        f"{BASE}/providers/test", json={**original, "api_key": ""}, timeout=90
+    ).json()
+    print(f"  ok={fallback['ok']}  {fallback['latency_ms']} ms  模型回：{fallback['reply'][:40]!r}")
+    print(
+        "  "
+        + (
+            "✅ 正确沿用了当前生效的 Key（用户不用重新粘一遍）"
+            if fallback["ok"]
+            else f"❌ 没能沿用：{fallback['message'][:90]}"
+        )
+    )
+
     print("\n【3】切换到「运行时配置」（模拟网页上点切换）")
     switched = httpx.post(
         f"{BASE}/providers/switch",

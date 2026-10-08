@@ -195,6 +195,29 @@ def clear_runtime() -> None:
         path.unlink()
 
 
+def _normalize(url: str) -> str:
+    return url.strip().rstrip("/").lower()
+
+
+def resolve_api_key(base_url: str, provided: str) -> str:
+    """决定这次到底用哪个 Key。
+
+    规则：**留空 + 地址和当前生效的一致 → 沿用当前生效的 Key。**
+
+    为什么需要这个：网页上打开「模型设置」时，Key 输入框是空的
+    （原始 Key 从不回传前端）。如果不做这个回退，用户想测一下
+    "当前正在用的这个模型通不通"，还得把 Key 重新粘一遍 —— 很蠢。
+    """
+    key = (provided or "").strip()
+    if key:
+        return key
+
+    active = get_active()
+    if _normalize(base_url) == _normalize(active.base_url):
+        return active.api_key
+    return ""
+
+
 # ---------------------------------------------------------------------------
 # 取当前生效的配置
 # ---------------------------------------------------------------------------

@@ -216,7 +216,8 @@ def switch_provider(request: ProviderSwitchRequest) -> dict:
     providers.save_runtime(
         provider=request.provider,
         base_url=request.base_url,
-        api_key=request.api_key,
+        # Key 留空 + 地址没变 → 沿用当前生效的 Key，用户不用重新粘一遍
+        api_key=providers.resolve_api_key(request.base_url, request.api_key),
         model=request.model,
     )
     return {"ok": True, "active": providers.get_active().to_public()}
@@ -254,7 +255,9 @@ def test_provider(request: ProviderSwitchRequest) -> ProviderTestResponse:
             # （现在 app/llm.py 会把这种情况转成显式异常，但这里也别贴着边设。）
             max_tokens=512,
             override_base_url=request.base_url,
-            override_api_key=request.api_key,
+            override_api_key=providers.resolve_api_key(
+                request.base_url, request.api_key
+            ),
         )
     except LLMError as exc:
         return ProviderTestResponse(
